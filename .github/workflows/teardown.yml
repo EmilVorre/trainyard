@@ -1,0 +1,112 @@
+name: Trainyard - Teardown Preview Environment
+
+on:
+  workflow_call:
+    inputs:
+      config-file:
+        description: "Path to the pr-preview.yml config file"
+        required: false
+        default: ".github/pr-preview.yml"
+        type: string
+      label:
+        description: "Label that controls the preview enviroment"
+        required: false
+        default: "preview"
+        type: string
+      secrets:
+        kubeconfig:
+          description: "Base64 encoded kubeconfig for the target cluster"
+          required: true
+
+jobs:
+  teardown:
+    # For "Unlabeled" events - only run if it's the preview label
+    # For "Closed" events - only run if the PR has the preview label
+
+  if: |
+    (github.event.action == 'unlabeled' && github.event.label.name == ${{ inputs.label }}) ||
+    (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, ${{ inputs.label }}))
+  runs-on: ubuntu-latest
+
+  env:
+    PR_NUMBER: ${{ github.event.pull_request.number }}
+    NAMESPACE: preview-pr-${{ github.event.pull_request.number }}
+
+
+  steps:
+    # -----------------------------------------------------------------------
+    # Set up kubectl
+    # -----------------------------------------------------------------------
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Configure kubeconfig
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    # -----------------------------------------------------------------------
+    # Delete the namespace - removes everything in the namespace automatically
+    # -----------------------------------------------------------------------
+    - name: Teardown namespace
+      run: |
+        NAMESPACE="${{ env.NAMESPACE }}"
+
+        if kubectl get namespace $NAMESPACE > /dev/null 2>&1; then
+          echo "Deleting namespace $NAMESPACE..."
+          kubectl delete namespace "$NAMESPACE"
+          echo "Namespace $NAMESPACE deleted"
+        else
+          echo "Namespace $NAMESPACE not found - already deleted"
+        fi
+
+    # -----------------------------------------------------------------------
+    # Post a comment on the PR with the teardown status
+    # -----------------------------------------------------------------------
+    - name: Update PR comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const prNumber = context.payload.pull_request?.number;
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+          });
+
+          const marker = "<!-- trainyard-preview -->";
+          const existing = comments.find(c =>
+            c.user.type === 'Bot' && c.body.includes(marker)
+          );
+          
+          const reason = context.payload.action === 'closed'
+            ? 'PR closed'
+            : ''preview' label removed';
+
+          const body = '${marker}
+          **Trainyard Preview Environment**
+ 
+          | | |
+          |---|---|
+          | **Status** | Torn down |
+          | **Reason** | ${reason} |
+          | **Namespace** | \`preview-pr-${prNumber}\` |`;
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+            console.log('Updated comment to torn down status');
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body,
+            });
+          }
