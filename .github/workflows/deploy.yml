@@ -91,7 +91,7 @@ jobs:
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
           PR_NUMBER="${{ env.PR_NUMBER }}"
-          REPO="${{ github.repository }}"
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
 
           SERVICE_COUNT=$(yq '.services | length' "$CONFIG_FILE")
 
@@ -149,7 +149,7 @@ jobs:
           PR_NUMBER="${{ env.PR_NUMBER }}"
           NAMESPACE="${{ env.NAMESPACE }}"
           DOMAIN="${{ steps.config.outputs.domain }}"
-          REPO="${{ github.repository }}"
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
 
           # Substitute {number} placeholders in the config and write to a temp file
           sed "s/{number}/${PR_NUMBER}/g" "$CONFIG_FILE" > /tmp/pr-values.yaml
