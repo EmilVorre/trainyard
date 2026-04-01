@@ -1,0 +1,102 @@
+# Trainyard — pr-preview Helm Chart values
+# These are the defaults. Override them per-PR via --set or --values in the
+# GitHub Actions workflow.
+
+# ----------------------------------------------------------------------------
+# Global settings
+# ----------------------------------------------------------------------------
+global:
+  # The PR number — injected by GitHub Actions at deploy time
+  prNumber: ""
+
+  # Base domain for preview environments
+  # e.g. "preview.yourdomain.com" → pr-42.preview.yourdomain.com
+  domain: "preview.yourdomain.com"
+
+# ----------------------------------------------------------------------------
+# Ingress defaults (applies to all public services unless overridden)
+# ----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  class: nginx
+  tls: true
+  # cert-manager cluster issuer name
+  clusterIssuer: letsencrypt-prod
+
+# ----------------------------------------------------------------------------
+# Services
+# Each entry creates a Deployment, a Service, and optionally an Ingress.
+#
+# Fields per service:
+#   name        (required) — used as the Kubernetes resource name and internal DNS name
+#   image       (required) — repository and tag
+#   port        (required) — port the container listens on
+#   public      (optional, default: false) — if true, creates an Ingress
+#   subdomain   (optional) — subdomain template, e.g. "pr-{number}" or "pr-{number}-api"
+#                            only used when public: true
+#   env         (optional) — list of {name, value} env vars
+#   envFromSecrets (optional) — list of {name, secretName, secretKey} for K8s secret refs
+#   resources   (optional) — cpu/memory limits
+#   dependsOn   (optional) — list of {service, port} to wait for before starting
+#                            implemented as initContainers with a TCP readiness check
+#   replicas    (optional, default: 1)
+# ----------------------------------------------------------------------------
+services:
+  - name: app
+    image:
+      repository: nginx
+      tag: latest
+      pullPolicy: Always
+    port: 80
+    public: true
+    subdomain: "pr-{number}"
+    replicas: 1
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+    env: []
+    # env:
+    #   - name: NODE_ENV
+    #     value: preview
+    #   - name: DATABASE_URL
+    #     value: postgres://postgres:postgres@database:5432/myapp
+
+    envFromSecrets: []
+    # envFromSecrets:
+    #   - name: SECRET_KEY
+    #     secretName: my-secret
+    #     secretKey: secret-key
+
+    dependsOn: []
+    # dependsOn:
+    #   - service: database
+    #     port: 5432
+
+# Example multi-service setup (uncomment to use):
+#
+#  - name: database
+#    image:
+#      repository: postgres
+#      tag: "16"
+#      pullPolicy: IfNotPresent
+#    port: 5432
+#    public: false
+#    replicas: 1
+#    resources:
+#      limits:
+#        cpu: "250m"
+#        memory: "256Mi"
+#      requests:
+#        cpu: "100m"
+#        memory: "128Mi"
+#    env:
+#      - name: POSTGRES_DB
+#        value: myapp
+#      - name: POSTGRES_PASSWORD
+#        value: postgres
+#    envFromSecrets: []
+#    dependsOn: []

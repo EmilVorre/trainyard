@@ -1,0 +1,36 @@
+{{- range .Values.services }}
+{{- if .public }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "pr-preview.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ .name }}
+  annotations:
+    kubernetes.io/ingress.class: {{ $.Values.ingress.class | default "nginx" }}
+    {{- if $.Values.ingress.tls }}
+    cert-manager.io/cluster-issuer: {{ $.Values.ingress.clusterIssuer | default "letsencrypt-prod" }}
+    {{- end }}
+spec:
+  {{- $hostname := include "pr-preview.hostname" (dict "subdomain" .subdomain "prNumber" $.Values.global.prNumber "domain" $.Values.global.domain) }}
+  {{- if $.Values.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ $hostname }}
+      secretName: tls-{{ .name }}-pr-{{ $.Values.global.prNumber }}
+  {{- end }}
+  rules:
+    - host: {{ $hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .name }}
+                port:
+                  number: {{ .port }}
+{{- end }}
+{{- end }}

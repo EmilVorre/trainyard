@@ -1,0 +1,18 @@
+apiVersion: v2
+name: pr-preview
+description: Trainyard — ephemeral PR preview environments for Kubernetes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - preview
+  - ephemeral
+  - pull-request
+  - kubernetes
+  - trainyard
+home: https://github.com/Emilvorre/trainyard
+sources:
+  - https://github.com/Emilvorre/trainyard
+maintainers:
+  - name: EmilVorre
+    url: https://github.com/Emilvorre

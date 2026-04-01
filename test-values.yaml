@@ -1,0 +1,41 @@
+global:
+  prNumber: "42"
+  domain: preview.yourdomain.com
+
+services:
+  - name: app
+    image:
+      repository: nginx
+      tag: latest
+    port: 80
+    public: true
+    subdomain: "pr-{number}"
+    replicas: 1
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    env:
+      - name: DB_HOST
+        value: database
+    dependsOn:
+      - service: database
+        port: 5432
+
+  - name: database
+    image:
+      repository: postgres
+      tag: "16"
+    port: 5432
+    public: false
+    replicas: 1
+    resources:
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+    env:
+      - name: POSTGRES_DB
+        value: testdb
+      - name: POSTGRES_PASSWORD
+        value: postgres
+    dependsOn: []
