@@ -37,7 +37,7 @@ Replaces {number} with the actual PR number.
 Usage: include "pr-preview.subdomain" (dict "subdomain" "pr-{number}" "prNumber" "42")
 */}}
 {{- define "pr-preview.subdomain" -}}
-{{- .subdomain | replace "{number}" .prNumber }}
+{{- .subdomain | replace "{number}" (.prNumber | toString) }}
 {{- end }}
 
 {{/*
