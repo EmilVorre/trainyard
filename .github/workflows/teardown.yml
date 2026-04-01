@@ -9,104 +9,124 @@ on:
         default: ".github/pr-preview.yml"
         type: string
       label:
-        description: "Label that controls the preview enviroment"
+        description: "Label that controls the preview environment"
         required: false
         default: "preview"
         type: string
-      secrets:
-        kubeconfig:
-          description: "Base64 encoded kubeconfig for the target cluster"
-          required: true
+    secrets:
+      kubeconfig:
+        description: "Base64 encoded kubeconfig for the target cluster"
+        required: true
 
 jobs:
   teardown:
-    # For "Unlabeled" events - only run if it's the preview label
-    # For "Closed" events - only run if the PR has the preview label
+    runs-on: ubuntu-latest
 
-  if: |
-    (github.event.action == 'unlabeled' && github.event.label.name == ${{ inputs.label }}) ||
-    (github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, ${{ inputs.label }}))
-  runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      NAMESPACE: preview-pr-${{ github.event.pull_request.number }}
 
-  env:
-    PR_NUMBER: ${{ github.event.pull_request.number }}
-    NAMESPACE: preview-pr-${{ github.event.pull_request.number }}
+    steps:
+      # -----------------------------------------------------------------------
+      # Check if this run should proceed based on label conditions.
+      # unlabeled -> only run if the removed label matches the trigger label
+      # closed    -> only run if the PR had the trigger label
+      # -----------------------------------------------------------------------
+      - name: Check label condition
+        id: check
+        run: |
+          LABEL="${{ inputs.label }}"
+          ACTION="${{ github.event.action }}"
+          EVENT_LABEL="${{ github.event.label.name }}"
+          PR_LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
 
+          if [ "$ACTION" = "unlabeled" ] && [ "$EVENT_LABEL" = "$LABEL" ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          elif [ "$ACTION" = "closed" ] && echo "$PR_LABELS" | grep -q "$LABEL"; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "Skipping -- label condition not met"
+          fi
 
-  steps:
-    # -----------------------------------------------------------------------
-    # Set up kubectl
-    # -----------------------------------------------------------------------
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
+      # -----------------------------------------------------------------------
+      # Set up kubectl then configure kubeconfig from the secret
+      # -----------------------------------------------------------------------
+      - name: Set up kubectl
+        if: steps.check.outputs.should_run == 'true'
+        uses: azure/setup-kubectl@v3
 
-    - name: Configure kubeconfig
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-        chmod 600 ~/.kube/config
+      - name: Configure kubeconfig
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.kubeconfig }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
 
-    # -----------------------------------------------------------------------
-    # Delete the namespace - removes everything in the namespace automatically
-    # -----------------------------------------------------------------------
-    - name: Teardown namespace
-      run: |
-        NAMESPACE="${{ env.NAMESPACE }}"
+      # -----------------------------------------------------------------------
+      # Delete the namespace -- removes everything inside it atomically.
+      # If the namespace doesn't exist we skip gracefully.
+      # -----------------------------------------------------------------------
+      - name: Teardown namespace
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          NAMESPACE="${{ env.NAMESPACE }}"
 
-        if kubectl get namespace $NAMESPACE > /dev/null 2>&1; then
-          echo "Deleting namespace $NAMESPACE..."
-          kubectl delete namespace "$NAMESPACE"
-          echo "Namespace $NAMESPACE deleted"
-        else
-          echo "Namespace $NAMESPACE not found - already deleted"
-        fi
+          if kubectl get namespace "$NAMESPACE" > /dev/null 2>&1; then
+            echo "Deleting namespace $NAMESPACE..."
+            kubectl delete namespace "$NAMESPACE"
+            echo "Namespace $NAMESPACE deleted"
+          else
+            echo "Namespace $NAMESPACE not found -- already torn down"
+          fi
 
-    # -----------------------------------------------------------------------
-    # Post a comment on the PR with the teardown status
-    # -----------------------------------------------------------------------
-    - name: Update PR comment
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const prNumber = context.payload.pull_request?.number;
+      # -----------------------------------------------------------------------
+      # Update the PR comment to show torn down status and reason.
+      # -----------------------------------------------------------------------
+      - name: Update PR comment
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
 
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: prNumber,
-          });
-
-          const marker = "<!-- trainyard-preview -->";
-          const existing = comments.find(c =>
-            c.user.type === 'Bot' && c.body.includes(marker)
-          );
-          
-          const reason = context.payload.action === 'closed'
-            ? 'PR closed'
-            : ''preview' label removed';
-
-          const body = '${marker}
-          **Trainyard Preview Environment**
- 
-          | | |
-          |---|---|
-          | **Status** | Torn down |
-          | **Reason** | ${reason} |
-          | **Namespace** | \`preview-pr-${prNumber}\` |`;
-
-          if (existing) {
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: existing.id,
-              body,
-            });
-            console.log('Updated comment to torn down status');
-          } else {
-            await github.rest.issues.createComment({
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body,
             });
-          }
+
+            const marker = '<!-- trainyard-preview -->';
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes(marker)
+            );
+
+            const reason = context.payload.action === 'closed'
+              ? 'PR closed'
+              : '`preview` label removed';
+
+            const body = `${marker}
+            **Trainyard Preview Environment**
+
+            | | |
+            |---|---|
+            | **Status** | Torn down |
+            | **Reason** | ${reason} |
+            | **Namespace** | \`preview-pr-${prNumber}\` |`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              console.log('Updated comment to torn down status');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
