@@ -20,138 +20,158 @@ on:
 
 jobs:
   deploy:
-    # For "Labeled" events - only rin if it's the preview label
-    # For "Synchronize" events - only run if the PR already has the preview label
+    runs-on: ubuntu-latest
 
-  if: |
-    (github.event.action == 'labeled' && github.event.label.name == ${{ inputs.label }}) ||
-    (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, ${{ inputs.label }}))
-  runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      NAMESPACE: preview-pr-${{ github.event.pull_request.number }}
 
-  env:
-    PR_NUMBER: ${{ github.event.pull_request.number }}
-    NAMESPACE: preview-pr-${{ github.event.pull_request.number }}
+    steps:
+      # -----------------------------------------------------------------------
+      # Check if this run should proceed based on label conditions.
+      # labeled    -> only run if the added label matches the trigger label
+      # synchronize -> only run if the PR already has the trigger label
+      # -----------------------------------------------------------------------
+      - name: Check label condition
+        id: check
+        run: |
+          LABEL="${{ inputs.label }}"
+          ACTION="${{ github.event.action }}"
+          EVENT_LABEL="${{ github.event.label.name }}"
+          PR_LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
 
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+          if [ "$ACTION" = "labeled" ] && [ "$EVENT_LABEL" = "$LABEL" ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          elif [ "$ACTION" = "synchronize" ] && echo "$PR_LABELS" | grep -q "$LABEL"; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "Skipping -- label condition not met"
+          fi
 
-    # -----------------------------------------------------------------------
-    # Parse pr-preview.yml to extract domain and service config
-    # -----------------------------------------------------------------------
-    - name: Read config
-      id: config
-      run: |
-        CONFIG_FILE="${{ inputs.config-file }}"
+      - name: Checkout
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/checkout@v4
 
-        if [ ! -f "$CONFIG_FILE" ]; then
-          echo "Error: Config file not found: $CONFIG_FILE"
-          exit 1
-        fi
+      # -----------------------------------------------------------------------
+      # Parse pr-preview.yml to extract domain and service config
+      # -----------------------------------------------------------------------
+      - name: Read config
+        if: steps.check.outputs.should_run == 'true'
+        id: config
+        run: |
+          CONFIG_FILE="${{ inputs.config-file }}"
 
-        # Extract domain
-        DOMAIN=$(yq '.app.domain' "$CONFIG_FILE")
-        echo "DOMAIN=$DOMAIN" >> $GITHUB_ENV
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Config file not found: $CONFIG_FILE"
+            exit 1
+          fi
 
-        echo "Config loaded - domain: $DOMAIN"
+          DOMAIN=$(yq '.app.domain' "$CONFIG_FILE")
+          echo "domain=$DOMAIN" >> $GITHUB_OUTPUT
+          echo "Config loaded - domain: $DOMAIN"
 
-    # -----------------------------------------------------------------------
-    # Login to GitHub Container Registry
-    # -----------------------------------------------------------------------
-    - name: Login to GHCR
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      # -----------------------------------------------------------------------
+      # Login to GitHub Container Registry
+      # -----------------------------------------------------------------------
+      - name: Login to GHCR
+        if: steps.check.outputs.should_run == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    # -----------------------------------------------------------------------
-    # Build and push all services that have a build context defined
-    # (services using upstream images like postgres are skipped)
-    # -----------------------------------------------------------------------
-    - name: Build and push images
+      # -----------------------------------------------------------------------
+      # Build and push all services that have a build context defined.
+      # Services using upstream images like postgres are skipped.
+      # -----------------------------------------------------------------------
+      - name: Build and push images
+        if: steps.check.outputs.should_run == 'true'
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
           PR_NUMBER="${{ env.PR_NUMBER }}"
           REPO="${{ github.repository }}"
 
-          # Loop over services that have a build.context defined
           SERVICE_COUNT=$(yq '.services | length' "$CONFIG_FILE")
- 
+
           for i in $(seq 0 $((SERVICE_COUNT - 1))); do
             BUILD_CONTEXT=$(yq ".services[$i].build.context // \"\"" "$CONFIG_FILE")
             SERVICE_NAME=$(yq ".services[$i].name" "$CONFIG_FILE")
- 
+
             if [ -n "$BUILD_CONTEXT" ]; then
               DOCKERFILE=$(yq ".services[$i].build.dockerfile // \"Dockerfile\"" "$CONFIG_FILE")
               IMAGE="ghcr.io/${REPO}/${SERVICE_NAME}:pr-${PR_NUMBER}"
- 
+
               echo "Building $SERVICE_NAME -> $IMAGE"
-              docker build \
-                -f "$DOCKERFILE" \
-                -t "$IMAGE" \
-                "$BUILD_CONTEXT"
- 
+              docker build -f "$DOCKERFILE" -t "$IMAGE" "$BUILD_CONTEXT"
+
               echo "Pushing $IMAGE"
               docker push "$IMAGE"
- 
               echo "$SERVICE_NAME image pushed"
             else
               echo "Skipping $SERVICE_NAME - no build context (upstream image)"
             fi
           done
-    # -----------------------------------------------------------------------
-    # Set up kubectl and Helm
-    # -----------------------------------------------------------------------
-    - name: Set up kubectl
-      uses: azure/setup-kubectl@v3
 
-    - name: Set up Helm
-      uses: azure/setup-helm@v3
+      # -----------------------------------------------------------------------
+      # Set up kubectl and Helm then configure kubeconfig from the secret
+      # -----------------------------------------------------------------------
+      - name: Set up kubectl
+        if: steps.check.outputs.should_run == 'true'
+        uses: azure/setup-kubectl@v3
 
-    - name: Configure kubeconfig
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
-        chmod 600 ~/.kube/config
+      - name: Set up Helm
+        if: steps.check.outputs.should_run == 'true'
+        uses: azure/setup-helm@v3
 
-    # -----------------------------------------------------------------------
-    # Add Trainyard Helm repo and deploy
-    # -----------------------------------------------------------------------
-    - name: Create namespace
-      run:  |
-        kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+      - name: Configure kubeconfig
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.kubeconfig }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # -----------------------------------------------------------------------
+      # Create the namespace if it doesn't exist (idempotent)
+      # then deploy via Helm, injecting the PR number and domain.
+      # Built service images are overridden with the PR-tagged image.
+      # -----------------------------------------------------------------------
+      - name: Create namespace
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy via Helm
+        if: steps.check.outputs.should_run == 'true'
         run: |
-          COMFIG_FILE="${{ inputs.config-file }}"
+          CONFIG_FILE="${{ inputs.config-file }}"
           PR_NUMBER="${{ env.PR_NUMBER }}"
           NAMESPACE="${{ env.NAMESPACE }}"
-          DOMAIN="${{ steps.config.outputs.DOMAIN }}"
+          DOMAIN="${{ steps.config.outputs.domain }}"
           REPO="${{ github.repository }}"
 
-          # Substitute pr-{number} in the config file and write to a temp file
-          # so Helm can use it as a values file directly 
-          sed "s/{number}/${PR_NUMBER}/g" "$CONFIG_FILE" > pr-preview-values.yaml
+          # Substitute {number} placeholders in the config and write to a temp file
+          sed "s/{number}/${PR_NUMBER}/g" "$CONFIG_FILE" > /tmp/pr-values.yaml
 
-          # Override image tags for built services
+          # Build --set args for any services that were built from source
           SERVICE_COUNT=$(yq '.services | length' "$CONFIG_FILE")
           SET_ARGS=""
 
           for i in $(seq 0 $((SERVICE_COUNT - 1))); do
-            BUILD_CONTEXT=$(yq ".services[$i].build.context // \"\"" "CONFIG_FILE")
-            SERVICE_NAME=$(yq ".services[$i].name" "CONFIG_FILE")
+            BUILD_CONTEXT=$(yq ".services[$i].build.context // \"\"" "$CONFIG_FILE")
+            SERVICE_NAME=$(yq ".services[$i].name" "$CONFIG_FILE")
 
             if [ -n "$BUILD_CONTEXT" ]; then
               IMAGE="ghcr.io/${REPO}/${SERVICE_NAME}"
               TAG="pr-${PR_NUMBER}"
-              SET_ARGS="${SET_ARGS} --set \"services[${i}].image.repository=${IMAGE}\" --set services[${i}].image.tag=${TAG}"
+              SET_ARGS="$SET_ARGS --set services[$i].image.repository=${IMAGE} --set services[$i].image.tag=${TAG}"
             fi
           done
 
           helm upgrade --install pr-${PR_NUMBER} \
             oci://ghcr.io/emilvorre/trainyard/charts/pr-preview \
-            --namespace $NAMESPACE \
+            --namespace "$NAMESPACE" \
             --create-namespace \
             --set global.prNumber="${PR_NUMBER}" \
             --set global.domain="${DOMAIN}" \
@@ -159,51 +179,52 @@ jobs:
             $SET_ARGS
 
           echo "Deployed to namespace $NAMESPACE"
-          
 
-    # -----------------------------------------------------------------------
-    # Post or update a comment on the PR with the preview URL
-    # -----------------------------------------------------------------------
-    - name: Comment preview URL on PR
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const prNumber = context.payload.pull_request?.number;
-          const domain = "${{ steps.config.outputs.DOMAIN }}";
-          const url = `https://pr-${prNumber}.${domain}`;
+      # -----------------------------------------------------------------------
+      # Post or update a single comment on the PR with the preview URL.
+      # Uses a hidden marker to find and update the existing comment on redeploy
+      # rather than spamming a new comment on every push.
+      # -----------------------------------------------------------------------
+      - name: Comment preview URL on PR
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const domain = "${{ steps.config.outputs.domain }}";
+            const url = `https://pr-${prNumber}.${domain}`;
 
-          // Find existing bot comment to update rather than spamming PR with new comments
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: prNumber,
-          });
-
-          const marker = "<!-- trainyard-preview -->";
-          const existing = comments.find(c =>
-            c.user.type === 'Bot' && c.body.includes(marker)
-          );
-
-          const body = '${marker}
-          **Trainyard Preview Environment**
-
-          | | |
-          |---|---|
-          | **Status** | Deployed |
-          | **URL** | [${url}](${url}) |
-          | **Namespace** | \`preview-pr-${prNumber}\` |
-
-          > Updated on every push while the \'preview\' label is applied
-          > Environment will be torn down when the label is removed or the PR is closed.';
-
-          if (existing) {
-            await github.resr.issues.updateComment({
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: existing.id,
-              body,
+              issue_number: prNumber,
             });
-            console.log('Updated existing preview comment');
+
+            const marker = '<!-- trainyard-preview -->';
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes(marker)
+            );
+
+            const body = `${marker}
+            **Trainyard Preview Environment**
+
+            | | |
+            |---|---|
+            | **Status** | Deployed |
+            | **URL** | [${url}](${url}) |
+            | **Namespace** | \`preview-pr-${prNumber}\` |
+
+            > Updated on every push while the \`preview\` label is applied.
+            > Environment will be torn down when the label is removed or the PR is closed.`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              console.log('Updated existing preview comment');
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -213,4 +234,3 @@ jobs:
               });
               console.log('Created new preview comment');
             }
-          };
