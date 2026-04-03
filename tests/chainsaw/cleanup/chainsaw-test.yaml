@@ -51,6 +51,7 @@ spec:
       try:
         - script:
             content: |
+              kubectl delete job trainyard-cleanup-e2e --namespace=trainyard-system --ignore-not-found
               kubectl create job trainyard-cleanup-e2e \
                 --from=cronjob/trainyard-cleanup \
                 --namespace=trainyard-system
