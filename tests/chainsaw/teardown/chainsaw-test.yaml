@@ -1,0 +1,111 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: teardown
+spec:
+  description: >
+    Simulates a PR teardown — installs a preview environment, then deletes the
+    namespace and asserts everything is gone.
+  steps:
+    - name: create-namespace
+      try:
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-9998
+                labels:
+                  trainyard.dev/preview: "true"
+                annotations:
+                  trainyard.dev/deployed-at: "2026-04-03T10:00:00Z"
+
+    - name: helm-install
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              helm upgrade --install pr-9998 \
+                oci://ghcr.io/emilvorre/trainyard/charts/pr-preview \
+                --version 0.1.2 \
+                --namespace preview-pr-9998 \
+                --set global.prNumber="9998" \
+                --set global.domain="preview.vorre.dev" \
+                --set ingress.tls=false \
+                --set "services[0].name=app" \
+                --set "services[0].image.repository=nginx" \
+                --set "services[0].image.tag=latest" \
+                --set "services[0].port=3000" \
+                --set "services[0].public=true" \
+                --set "services[0].subdomain=pr-{number}" \
+                --set "services[0].replicas=1"
+            check:
+              ($error): ~
+
+    - name: assert-deployment-exists-before-teardown
+      try:
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: app
+                namespace: preview-pr-9998
+
+    - name: delete-namespace
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              kubectl delete namespace preview-pr-9998
+            check:
+              ($error): ~
+
+    - name: assert-namespace-gone
+      try:
+        - error:
+            timeout: 2m
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-9998
+
+    - name: assert-deployment-gone
+      try:
+        - error:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: app
+                namespace: preview-pr-9998
+
+    - name: assert-service-gone
+      try:
+        - error:
+            resource:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: app
+                namespace: preview-pr-9998
+
+    - name: assert-ingress-gone
+      try:
+        - error:
+            resource:
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: app
+                namespace: preview-pr-9998
+
+    - name: delete-namespace-again-is-safe
+      try:
+        - script:
+            content: |
+              kubectl delete namespace preview-pr-9998 --ignore-not-found
+            check:
+              ($error): ~

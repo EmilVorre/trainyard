@@ -1,0 +1,126 @@
+suite: rbac tests
+templates:
+  - rbac.yaml
+
+tests:
+  # ── Document count ─────────────────────────────────────────────────────────
+
+  - it: should render exactly 3 resources
+    asserts:
+      - hasDocuments:
+          count: 3
+
+  # ── ServiceAccount ─────────────────────────────────────────────────────────
+
+  - it: should create a ServiceAccount
+    documentIndex: 0
+    asserts:
+      - isKind:
+          of: ServiceAccount
+      - equal:
+          path: metadata.name
+          value: trainyard-cleanup
+
+  - it: should place the ServiceAccount in the configured namespace
+    documentIndex: 0
+    set:
+      namespace: trainyard-system
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: trainyard-system
+
+  # ── ClusterRole ────────────────────────────────────────────────────────────
+
+  - it: should create a ClusterRole
+    documentIndex: 1
+    asserts:
+      - isKind:
+          of: ClusterRole
+      - equal:
+          path: metadata.name
+          value: trainyard-cleanup
+
+  - it: should grant list get delete on namespaces
+    documentIndex: 1
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: ["namespaces"]
+            verbs: ["list", "get", "delete"]
+
+  # ── ClusterRoleBinding ─────────────────────────────────────────────────────
+
+  - it: should create a ClusterRoleBinding
+    documentIndex: 2
+    asserts:
+      - isKind:
+          of: ClusterRoleBinding
+      - equal:
+          path: metadata.name
+          value: trainyard-cleanup
+
+  - it: should bind to the trainyard-cleanup ClusterRole
+    documentIndex: 2
+    asserts:
+      - equal:
+          path: roleRef.kind
+          value: ClusterRole
+      - equal:
+          path: roleRef.name
+          value: trainyard-cleanup
+      - equal:
+          path: roleRef.apiGroup
+          value: rbac.authorization.k8s.io
+
+  - it: should bind the ServiceAccount as subject
+    documentIndex: 2
+    set:
+      namespace: trainyard-system
+    asserts:
+      - contains:
+          path: subjects
+          content:
+            kind: ServiceAccount
+            name: trainyard-cleanup
+            namespace: trainyard-system
+
+  - it: should use custom namespace in ClusterRoleBinding subject
+    documentIndex: 2
+    set:
+      namespace: my-custom-ns
+    asserts:
+      - contains:
+          path: subjects
+          content:
+            kind: ServiceAccount
+            name: trainyard-cleanup
+            namespace: my-custom-ns
+
+  # ── Labels ─────────────────────────────────────────────────────────────────
+
+  - it: should have correct labels on ServiceAccount
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: trainyard-cleanup
+      - equal:
+          path: metadata.labels["app.kubernetes.io/managed-by"]
+          value: Helm
+
+  - it: should have correct labels on ClusterRole
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: trainyard-cleanup
+
+  - it: should have correct labels on ClusterRoleBinding
+    documentIndex: 2
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: trainyard-cleanup

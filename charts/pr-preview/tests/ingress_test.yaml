@@ -1,0 +1,284 @@
+suite: ingress tests
+templates:
+  - ingress.yaml
+
+tests:
+  # ── Public flag ────────────────────────────────────────────────────────────
+
+  - it: should not create an Ingress for private services
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: database
+          image:
+            repository: postgres
+            tag: "16"
+          port: 5432
+          public: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should create an Ingress for public services
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: should only create Ingress for public services in a mixed setup
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+        - name: database
+          image:
+            repository: postgres
+            tag: "16"
+          port: 5432
+          public: false
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  # ── Hostname ───────────────────────────────────────────────────────────────
+
+  - it: should resolve the hostname with the correct PR number
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: spec.rules[0].host
+          value: pr-42.preview.vorre.dev
+
+  - it: should resolve a custom subdomain pattern with the PR number
+    set:
+      global.prNumber: "99"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: api
+          image:
+            repository: myorg/api
+            tag: latest
+          port: 3000
+          public: true
+          subdomain: "pr-{number}-api"
+    asserts:
+      - equal:
+          path: spec.rules[0].host
+          value: pr-99-api.preview.vorre.dev
+
+  # ── Ingress class & annotations ────────────────────────────────────────────
+
+  - it: should set the nginx ingress class annotation
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: metadata.annotations["kubernetes.io/ingress.class"]
+          value: nginx
+
+  - it: should disable ssl-redirect via annotation
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/ssl-redirect"]
+          value: "false"
+
+  # ── TLS disabled ───────────────────────────────────────────────────────────
+
+  - it: should not include a TLS block when tls is false
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - notExists:
+          path: spec.tls
+
+  - it: should not include cert-manager annotation when tls is false
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - notExists:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]
+
+  # ── TLS enabled ────────────────────────────────────────────────────────────
+
+  - it: should include TLS block when tls is true
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: true
+        clusterIssuer: letsencrypt-prod
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: pr-42.preview.vorre.dev
+      - equal:
+          path: spec.tls[0].secretName
+          value: tls-app-pr-42
+
+  - it: should set the cert-manager cluster issuer annotation when tls is true
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: true
+        clusterIssuer: letsencrypt-prod
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: metadata.annotations["cert-manager.io/cluster-issuer"]
+          value: letsencrypt-prod
+
+  # ── Backend ────────────────────────────────────────────────────────────────
+
+  - it: should point the backend to the correct service and port
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 8080
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: app
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.port.number
+          value: 8080
+
+  - it: should use Prefix pathType
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      ingress:
+        class: nginx
+        tls: false
+      services:
+        - name: app
+          image:
+            repository: nginx
+            tag: latest
+          port: 80
+          public: true
+          subdomain: "pr-{number}"
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].pathType
+          value: Prefix

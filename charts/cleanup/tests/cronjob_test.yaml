@@ -1,0 +1,221 @@
+suite: cronjob tests
+templates:
+  - cronjob.yaml
+
+tests:
+  # ── Basic rendering ────────────────────────────────────────────────────────
+
+  - it: should render a CronJob resource
+    asserts:
+      - isKind:
+          of: CronJob
+
+  - it: should have the correct name
+    asserts:
+      - equal:
+          path: metadata.name
+          value: trainyard-cleanup
+
+  - it: should be in the configured namespace
+    set:
+      namespace: trainyard-system
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: trainyard-system
+
+  - it: should use a custom namespace when overridden
+    set:
+      namespace: my-custom-ns
+    asserts:
+      - equal:
+          path: metadata.namespace
+          value: my-custom-ns
+
+  # ── Schedule ───────────────────────────────────────────────────────────────
+
+  - it: should set the default schedule
+    asserts:
+      - equal:
+          path: spec.schedule
+          value: "0 0 * * *"
+
+  - it: should use a custom schedule when overridden
+    set:
+      schedule: "0 2 * * *"
+    asserts:
+      - equal:
+          path: spec.schedule
+          value: "0 2 * * *"
+
+  - it: should set concurrencyPolicy to Forbid
+    asserts:
+      - equal:
+          path: spec.concurrencyPolicy
+          value: Forbid
+
+  # ── Job history limits ─────────────────────────────────────────────────────
+
+  - it: should set successfulJobsHistoryLimit
+    set:
+      successfulJobsHistoryLimit: 3
+    asserts:
+      - equal:
+          path: spec.successfulJobsHistoryLimit
+          value: 3
+
+  - it: should set failedJobsHistoryLimit
+    set:
+      failedJobsHistoryLimit: 3
+    asserts:
+      - equal:
+          path: spec.failedJobsHistoryLimit
+          value: 3
+
+  - it: should respect custom history limits
+    set:
+      successfulJobsHistoryLimit: 5
+      failedJobsHistoryLimit: 1
+    asserts:
+      - equal:
+          path: spec.successfulJobsHistoryLimit
+          value: 5
+      - equal:
+          path: spec.failedJobsHistoryLimit
+          value: 1
+
+  # ── Pod spec ───────────────────────────────────────────────────────────────
+
+  - it: should use the trainyard-cleanup service account
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.serviceAccountName
+          value: trainyard-cleanup
+
+  - it: should set restartPolicy to OnFailure
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.restartPolicy
+          value: OnFailure
+
+  # ── Image ──────────────────────────────────────────────────────────────────
+
+  - it: should set the correct image
+    set:
+      image:
+        repository: ghcr.io/emilvorre/trainyard/cleanup
+        tag: "latest"
+        pullPolicy: Always
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].image
+          value: "ghcr.io/emilvorre/trainyard/cleanup:latest"
+
+  - it: should use a pinned image tag when overridden
+    set:
+      image:
+        repository: ghcr.io/emilvorre/trainyard/cleanup
+        tag: "0.1.0"
+        pullPolicy: IfNotPresent
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].image
+          value: "ghcr.io/emilvorre/trainyard/cleanup:0.1.0"
+
+  - it: should set imagePullPolicy
+    set:
+      image:
+        repository: ghcr.io/emilvorre/trainyard/cleanup
+        tag: latest
+        pullPolicy: Always
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].imagePullPolicy
+          value: Always
+
+  # ── Environment variables ──────────────────────────────────────────────────
+
+  - it: should set MAX_AGE_DAYS env var
+    set:
+      maxAgeDays: 7
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: MAX_AGE_DAYS
+            value: "7"
+
+  - it: should set NAMESPACE_LABEL env var
+    set:
+      namespaceLabel: "trainyard.dev/preview=true"
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: NAMESPACE_LABEL
+            value: "trainyard.dev/preview=true"
+
+  - it: should set DEPLOYED_AT_ANNOTATION env var
+    set:
+      deployedAtAnnotation: "trainyard.dev/deployed-at"
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: DEPLOYED_AT_ANNOTATION
+            value: "trainyard.dev/deployed-at"
+
+  - it: should set LOG_LEVEL env var
+    set:
+      logLevel: info
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: LOG_LEVEL
+            value: "info"
+
+  - it: should use debug log level when overridden
+    set:
+      logLevel: debug
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: LOG_LEVEL
+            value: "debug"
+
+  - it: should reflect a custom maxAgeDays
+    set:
+      maxAgeDays: 14
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: MAX_AGE_DAYS
+            value: "14"
+
+  # ── Resources ──────────────────────────────────────────────────────────────
+
+  - it: should set resource limits
+    set:
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+        requests:
+          cpu: "50m"
+          memory: "32Mi"
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].resources.limits.cpu
+          value: "100m"
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].resources.limits.memory
+          value: "64Mi"
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].resources.requests.cpu
+          value: "50m"
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].resources.requests.memory
+          value: "32Mi"
