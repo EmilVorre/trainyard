@@ -1,0 +1,60 @@
+name: Publish Cleanup Chart & Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "charts/cleanup/**"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/trainyard/cleanup
+  CHART_NAME: cleanup
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract chart version
+        id: chart
+        run: |
+          VERSION=$(grep '^version:' charts/cleanup/Chart.yaml | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build and push cleanup image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: charts/cleanup/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.chart.outputs.version }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Package Helm chart
+        run: |
+          helm package charts/cleanup --destination /tmp/charts
+
+      - name: Push Helm chart to GHCR
+        run: |
+          helm push /tmp/charts/${{ env.CHART_NAME }}-${{ steps.chart.outputs.version }}.tgz \
+            oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/trainyard/charts

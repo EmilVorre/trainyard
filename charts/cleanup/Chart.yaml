@@ -1,0 +1,16 @@
+apiVersion: v2
+name: cleanup
+description: Stale preview environment cleanup CronJob for Trainyard
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - trainyard
+  - preview
+  - cleanup
+home: https://github.com/Emilvorre/trainyard
+sources:
+  - https://github.com/Emilvorre/trainyard
+maintainers:
+  - name: Emil Vorre
+    url: https://github.com/Emilvorre
