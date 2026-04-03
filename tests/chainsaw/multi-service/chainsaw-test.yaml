@@ -1,0 +1,175 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-service
+spec:
+  description: >
+    Verifies that a multi-service preview environment deploys correctly —
+    a public frontend and a private backend. Asserts the frontend gets an
+    Ingress and the backend does not.
+  steps:
+    # ── 1. Create namespace ───────────────────────────────────────────────────
+    - name: create-namespace
+      try:
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-9997
+                labels:
+                  trainyard.dev/preview: "true"
+                annotations:
+                  trainyard.dev/deployed-at: "2026-04-03T10:00:00Z"
+
+    # ── 2. Install chart with two services ───────────────────────────────────
+    - name: helm-install-multi-service
+      try:
+        - script:
+            content: |
+              helm upgrade --install pr-9997 \
+                oci://ghcr.io/emilvorre/trainyard/charts/pr-preview \
+                --version 0.1.2 \
+                --namespace preview-pr-9997 \
+                --set global.prNumber="9997" \
+                --set global.domain="preview.vorre.dev" \
+                --set ingress.tls=false \
+                --set ingress.class=nginx \
+                --set "services[0].name=app" \
+                --set "services[0].image.repository=nginx" \
+                --set "services[0].image.tag=latest" \
+                --set "services[0].port=3000" \
+                --set "services[0].public=true" \
+                --set "services[0].subdomain=pr-{number}" \
+                --set "services[0].replicas=1" \
+                --set "services[1].name=database" \
+                --set "services[1].image.repository=postgres" \
+                --set "services[1].image.tag=16" \
+                --set "services[1].port=5432" \
+                --set "services[1].public=false" \
+                --set "services[1].replicas=1"
+            check:
+              ($error): ~
+
+    # ── 3. Assert both Deployments exist ─────────────────────────────────────
+    - name: assert-app-deployment
+      try:
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: app
+                namespace: preview-pr-9997
+
+    - name: assert-database-deployment
+      try:
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: database
+                namespace: preview-pr-9997
+
+    # ── 4. Assert both Services exist ────────────────────────────────────────
+    - name: assert-app-service
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: app
+                namespace: preview-pr-9997
+              spec:
+                ports:
+                  - port: 3000
+
+    - name: assert-database-service
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: database
+                namespace: preview-pr-9997
+              spec:
+                ports:
+                  - port: 5432
+
+    # ── 5. Assert only app gets an Ingress ───────────────────────────────────
+    - name: assert-app-ingress-exists
+      try:
+        - assert:
+            resource:
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: app
+                namespace: preview-pr-9997
+              spec:
+                rules:
+                  - host: pr-9997.preview.vorre.dev
+
+    - name: assert-database-has-no-ingress
+      try:
+        - error:
+            resource:
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: database
+                namespace: preview-pr-9997
+
+    # ── 6. Assert dependsOn initContainer wiring ─────────────────────────────
+    # (reinstall app with dependsOn to verify initContainer is created)
+    - name: helm-upgrade-with-depends-on
+      try:
+        - script:
+            content: |
+              helm upgrade pr-9997 \
+                oci://ghcr.io/emilvorre/trainyard/charts/pr-preview \
+                --version 0.1.2 \
+                --namespace preview-pr-9997 \
+                --set global.prNumber="9997" \
+                --set global.domain="preview.vorre.dev" \
+                --set ingress.tls=false \
+                --set "services[0].name=app" \
+                --set "services[0].image.repository=nginx" \
+                --set "services[0].image.tag=latest" \
+                --set "services[0].port=3000" \
+                --set "services[0].public=true" \
+                --set "services[0].subdomain=pr-{number}" \
+                --set "services[0].dependsOn[0].service=database" \
+                --set "services[0].dependsOn[0].port=5432" \
+                --set "services[1].name=database" \
+                --set "services[1].image.repository=postgres" \
+                --set "services[1].image.tag=16" \
+                --set "services[1].port=5432" \
+                --set "services[1].public=false"
+            check:
+              ($error): ~
+
+    - name: assert-init-container-present
+      try:
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: app
+                namespace: preview-pr-9997
+              spec:
+                template:
+                  spec:
+                    initContainers:
+                      - name: wait-for-database
+
+  # ── Cleanup ───────────────────────────────────────────────────────────────
+  cleanup:
+    - script:
+        content: |
+          helm uninstall pr-9997 --namespace preview-pr-9997 --ignore-not-found
+          kubectl delete namespace preview-pr-9997 --ignore-not-found

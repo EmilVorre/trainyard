@@ -1,0 +1,109 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: cleanup
+spec:
+  description: >
+    Verifies the trainyard cleanup CronJob correctly deletes stale preview
+    namespaces. Creates a namespace stamped 8 days in the past, triggers a
+    one-off Job from the CronJob, and asserts the namespace is deleted.
+    Also creates a fresh namespace and asserts it is NOT deleted.
+  steps:
+    # ── 1. Create a stale namespace (8 days old) ─────────────────────────────
+    - name: create-stale-namespace
+      try:
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-stale-test
+                labels:
+                  trainyard.dev/preview: "true"
+                annotations:
+                  trainyard.dev/deployed-at: "2026-03-25T10:00:00Z"
+
+    # ── 2. Create a fresh namespace (1 hour old) ──────────────────────────────
+    - name: create-fresh-namespace
+      try:
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-fresh-test
+                labels:
+                  trainyard.dev/preview: "true"
+                annotations:
+                  trainyard.dev/deployed-at: "2026-04-03T09:00:00Z"
+
+    # ── 3. Assert the CronJob exists and is configured correctly ─────────────
+    - name: assert-cronjob-exists
+      try:
+        - assert:
+            resource:
+              apiVersion: batch/v1
+              kind: CronJob
+              metadata:
+                name: trainyard-cleanup
+                namespace: trainyard-system
+              spec:
+                concurrencyPolicy: Forbid
+
+    # ── 4. Trigger a one-off Job from the CronJob ────────────────────────────
+    - name: trigger-cleanup-job
+      try:
+        - script:
+            content: |
+              kubectl create job trainyard-cleanup-e2e \
+                --from=cronjob/trainyard-cleanup \
+                --namespace=trainyard-system
+            check:
+              ($error): ~
+
+    # ── 5. Wait for the Job to complete ──────────────────────────────────────
+    - name: assert-job-completed
+      try:
+        - assert:
+            timeout: 3m
+            resource:
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: trainyard-cleanup-e2e
+                namespace: trainyard-system
+              status:
+                conditions:
+                  - type: Complete
+                    status: "True"
+
+    # ── 6. Assert stale namespace was deleted ─────────────────────────────────
+    - name: assert-stale-namespace-deleted
+      try:
+        - error:
+            timeout: 1m
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-stale-test
+
+    # ── 7. Assert fresh namespace was NOT deleted ─────────────────────────────
+    - name: assert-fresh-namespace-survived
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-fresh-test
+                labels:
+                  trainyard.dev/preview: "true"
+
+  # ── Cleanup — always runs ──────────────────────────────────────────────────
+  cleanup:
+    - script:
+        content: |
+          kubectl delete job trainyard-cleanup-e2e --namespace=trainyard-system --ignore-not-found
+          kubectl delete namespace preview-pr-stale-test --ignore-not-found
+          kubectl delete namespace preview-pr-fresh-test --ignore-not-found

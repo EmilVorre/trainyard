@@ -1,0 +1,153 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: deploy
+spec:
+  description: >
+    Simulates a PR preview deploy — creates the namespace with the correct
+    labels/annotations, installs the pr-preview chart, and asserts that all
+    resources come up correctly.
+  steps:
+    # ── 1. Create namespace ──────────────────────────────────────────────────
+    - name: create-namespace
+      try:
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-9999
+                labels:
+                  trainyard.dev/preview: "true"
+                annotations:
+                  trainyard.dev/deployed-at: "2026-04-03T10:00:00Z"
+
+    - name: assert-namespace-exists
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-9999
+                labels:
+                  trainyard.dev/preview: "true"
+
+    # ── 2. Install Helm chart ────────────────────────────────────────────────
+    - name: helm-install
+      try:
+        - script:
+            content: |
+              helm upgrade --install pr-9999 \
+                oci://ghcr.io/emilvorre/trainyard/charts/pr-preview \
+                --version 0.1.2 \
+                --namespace preview-pr-9999 \
+                --set global.prNumber="9999" \
+                --set global.domain="preview.vorre.dev" \
+                --set ingress.tls=true \
+                --set ingress.class=nginx \
+                --set ingress.clusterIssuer=letsencrypt-prod \
+                --set "services[0].name=app" \
+                --set "services[0].image.repository=nginx" \
+                --set "services[0].image.tag=latest" \
+                --set "services[0].port=3000" \
+                --set "services[0].public=true" \
+                --set "services[0].subdomain=pr-{number}" \
+                --set "services[0].replicas=1"
+            check:
+              ($error): ~
+
+    # ── 3. Assert Deployment ─────────────────────────────────────────────────
+    - name: assert-deployment-exists
+      try:
+        - assert:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: app
+                namespace: preview-pr-9999
+              spec:
+                replicas: 1
+                selector:
+                  matchLabels:
+                    app.kubernetes.io/name: app
+
+    - name: assert-deployment-ready
+      try:
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: app
+                namespace: preview-pr-9999
+              status:
+                availableReplicas: 1
+
+    # ── 4. Assert Service ────────────────────────────────────────────────────
+    - name: assert-service-exists
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                name: app
+                namespace: preview-pr-9999
+              spec:
+                type: ClusterIP
+                ports:
+                  - port: 3000
+                    targetPort: http
+
+    # ── 5. Assert Ingress ────────────────────────────────────────────────────
+    - name: assert-ingress-exists
+      try:
+        - assert:
+            resource:
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: app
+                namespace: preview-pr-9999
+                annotations:
+                  kubernetes.io/ingress.class: nginx
+                  nginx.ingress.kubernetes.io/ssl-redirect: "false"
+                  cert-manager.io/cluster-issuer: letsencrypt-prod
+              spec:
+                rules:
+                  - host: pr-9999.preview.vorre.dev
+                    http:
+                      paths:
+                        - path: /
+                          pathType: Prefix
+                          backend:
+                            service:
+                              name: app
+                              port:
+                                number: 3000
+                tls:
+                  - hosts:
+                      - pr-9999.preview.vorre.dev
+                    secretName: tls-app-pr-9999
+
+    # ── 6. Assert namespace labels and annotations are correct ───────────────
+    - name: assert-namespace-labels
+      try:
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: preview-pr-9999
+                labels:
+                  trainyard.dev/preview: "true"
+
+  # ── Cleanup — always runs ──────────────────────────────────────────────────
+  cleanup:
+    - script:
+        content: |
+          helm uninstall pr-9999 --namespace preview-pr-9999 --ignore-not-found
+          kubectl delete namespace preview-pr-9999 --ignore-not-found

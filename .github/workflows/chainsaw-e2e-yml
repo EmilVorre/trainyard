@@ -1,0 +1,39 @@
+name: Chainsaw E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  chainsaw:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.CHAINSAW_KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Verify cluster connectivity
+        run: kubectl cluster-info
+
+      - name: Install Chainsaw
+        uses: kyverno/action-install-chainsaw@v0.2.14
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Chainsaw tests
+        run: chainsaw test --test-dir tests/chainsaw/
