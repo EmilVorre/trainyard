@@ -101,7 +101,7 @@ spec:
                   trainyard.dev/preview: "true"
 
   # ── Cleanup — always runs ──────────────────────────────────────────────────
-  cleanup:
+  finally:
     - script:
         content: |
           kubectl delete job trainyard-cleanup-e2e --namespace=trainyard-system --ignore-not-found

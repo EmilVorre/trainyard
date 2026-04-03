@@ -168,7 +168,7 @@ spec:
                       - name: wait-for-database
 
   # ── Cleanup ───────────────────────────────────────────────────────────────
-  cleanup:
+  finally:
     - script:
         content: |
           helm uninstall pr-9997 --namespace preview-pr-9997 --ignore-not-found

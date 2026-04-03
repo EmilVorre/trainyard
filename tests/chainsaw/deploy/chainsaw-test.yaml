@@ -146,7 +146,7 @@ spec:
                   trainyard.dev/preview: "true"
 
   # ── Cleanup — always runs ──────────────────────────────────────────────────
-  cleanup:
+  finally:
     - script:
         content: |
           helm uninstall pr-9999 --namespace preview-pr-9999 --ignore-not-found
