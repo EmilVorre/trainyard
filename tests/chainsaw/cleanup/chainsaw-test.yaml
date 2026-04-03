@@ -71,6 +71,8 @@ spec:
                 conditions:
                   - type: Complete
                     status: "True"
+                  - type: SuccessCriteriaMet
+                    status: "True"
 
     - name: assert-stale-namespace-deleted
       try:
@@ -94,6 +96,7 @@ spec:
                   trainyard.dev/preview: "true"
       finally:
         - script:
+            timeout: 2m
             content: |
               kubectl delete job trainyard-cleanup-e2e --namespace=trainyard-system --ignore-not-found
               kubectl delete namespace preview-pr-stale-test --ignore-not-found
