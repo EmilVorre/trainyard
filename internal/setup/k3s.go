@@ -42,7 +42,7 @@ func waitForK3s(timeoutSeconds int) error {
 	}
 	return fmt.Errorf("k3s did not become ready within %ds", timeoutSeconds)
 }
- 
+
 func k3sRunning() bool {
 	err := runSilent("systemctl", "is-active", "--quiet", "k3s")
 	return err == nil

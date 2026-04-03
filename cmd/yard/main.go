@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/Emilvorre/trainyard/internal/scaffold"
 	"github.com/Emilvorre/trainyard/internal/setup"
 	"github.com/Emilvorre/trainyard/internal/validate"
+	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use: "yard",
+	Use:   "yard",
 	Short: "Trainyard is a tool for managing ephemeral Kubernetes preview environments",
 	Long: `yard is the CLI for Trainyard.
 

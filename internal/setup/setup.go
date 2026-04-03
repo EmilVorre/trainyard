@@ -1,13 +1,13 @@
 package setup
- 
+
 import (
 	"fmt"
 	"os"
- 
+
 	"github.com/Emilvorre/trainyard/internal/tui"
 	"github.com/spf13/cobra"
 )
- 
+
 // Command returns the cobra command for `yard setup`.
 func Command() *cobra.Command {
 	cmd := &cobra.Command{
@@ -29,7 +29,7 @@ Installs:
 Outputs a base64-encoded KUBE_CONFIG secret for GitHub Actions.`,
 		RunE: runSetup,
 	}
- 
+
 	// Allow skipping individual steps (useful for re-runs)
 	cmd.Flags().Bool("skip-k3s", false, "Skip k3s installation")
 	cmd.Flags().Bool("skip-helm", false, "Skip Helm installation")
@@ -37,10 +37,10 @@ Outputs a base64-encoded KUBE_CONFIG secret for GitHub Actions.`,
 	cmd.Flags().Bool("skip-certmanager", false, "Skip cert-manager installation")
 	cmd.Flags().Bool("skip-nginx", false, "Skip system nginx config")
 	cmd.Flags().Bool("skip-cert", false, "Skip TLS certificate issuance")
- 
+
 	return cmd
 }
- 
+
 func runSetup(cmd *cobra.Command, _ []string) error {
 	skipK3s, _ := cmd.Flags().GetBool("skip-k3s")
 	skipHelm, _ := cmd.Flags().GetBool("skip-helm")
@@ -48,53 +48,53 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 	skipCertManager, _ := cmd.Flags().GetBool("skip-certmanager")
 	skipNginx, _ := cmd.Flags().GetBool("skip-nginx")
 	skipCert, _ := cmd.Flags().GetBool("skip-cert")
- 
+
 	tui.Banner()
- 
+
 	// ── Step 0: System check ─────────────────────────────────────────────────
 	sysInfo, err := checkSystem()
 	if err != nil {
 		tui.Fatal("System check failed: %v", err)
 	}
 	printSystemSummary(sysInfo)
- 
+
 	if !tui.Confirm("Proceed with setup?") {
 		fmt.Println("  Aborted.")
 		os.Exit(0)
 	}
- 
+
 	// ── Step 1: Gather config ────────────────────────────────────────────────
 	tui.Section("Configuration")
- 
+
 	serverIP := tui.Prompt("Server public IP", detectPublicIP())
 	domain := tui.Prompt("Wildcard domain (e.g. preview.vorre.dev)", "")
 	if domain == "" {
 		tui.Fatal("Domain is required")
 	}
 	domain = sanitizeDomain(domain) // strip leading *.
- 
+
 	email := tui.Prompt("Email for Let's Encrypt / acme.sh", "")
 	if email == "" {
 		tui.Fatal("Email is required")
 	}
- 
+
 	httpPort := 31540
 	httpsPort := 30456
- 
+
 	cCfg := pickDNSProvider(domain, email)
- 
+
 	fmt.Println()
 	tui.Info("Domain:    *.%s", domain)
 	tui.Info("Server IP: %s", serverIP)
 	tui.Info("HTTP port: %d (k3s NodePort)", httpPort)
 	tui.Info("Email:     %s", email)
 	fmt.Println()
- 
+
 	if !tui.Confirm("Start installation?") {
 		fmt.Println("  Aborted.")
 		os.Exit(0)
 	}
- 
+
 	// ── Step 2: k3s ──────────────────────────────────────────────────────────
 	tui.Section("k3s")
 	if skipK3s || k3sRunning() {
@@ -104,7 +104,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 			tui.Fatal("k3s installation failed: %v", err)
 		}
 	}
- 
+
 	// ── Step 3: Helm ─────────────────────────────────────────────────────────
 	tui.Section("Helm")
 	if skipHelm || commandExists("helm") {
@@ -114,7 +114,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 			tui.Fatal("Helm installation failed: %v", err)
 		}
 	}
- 
+
 	// ── Step 4: Nginx Ingress Controller ─────────────────────────────────────
 	tui.Section("Nginx Ingress Controller")
 	if skipIngress {
@@ -126,7 +126,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 			tui.Fatal("Nginx Ingress installation failed: %v", err)
 		}
 	}
- 
+
 	// ── Step 5: cert-manager ─────────────────────────────────────────────────
 	tui.Section("cert-manager")
 	if skipCertManager {
@@ -141,7 +141,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 			tui.Fatal("ClusterIssuer apply failed: %v", err)
 		}
 	}
- 
+
 	// ── Step 6: System nginx config ──────────────────────────────────────────
 	tui.Section("System nginx")
 	if skipNginx {
@@ -153,7 +153,7 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 			tui.Fatal("Nginx config failed: %v", err)
 		}
 	}
- 
+
 	// ── Step 7: TLS certificate ──────────────────────────────────────────────
 	tui.Section("TLS Certificate (acme.sh)")
 	if skipCert {
@@ -171,13 +171,13 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 			tui.Fatal("Cert install failed: %v", err)
 		}
 	}
- 
+
 	// ── Step 8: Kubeconfig output ────────────────────────────────────────────
 	tui.Section("GitHub Actions Secret")
 	if err := outputKubeconfig(serverIP); err != nil {
 		tui.Fatal("Could not output kubeconfig: %v", err)
 	}
- 
+
 	// ── Done ─────────────────────────────────────────────────────────────────
 	fmt.Println()
 	tui.Success("Setup complete! Your server is ready to host PR preview environments.")
@@ -187,10 +187,10 @@ func runSetup(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("    2. Run `yard init` in each consuming repo\n")
 	fmt.Printf("    3. Open a PR and add the `preview` label\n")
 	fmt.Println()
- 
+
 	return nil
 }
- 
+
 // detectPublicIP tries to auto-detect the server's public IP.
 func detectPublicIP() string {
 	ip, err := runOutput("curl", "-sf", "https://ifconfig.me")
@@ -199,4 +199,3 @@ func detectPublicIP() string {
 	}
 	return ip
 }
- 

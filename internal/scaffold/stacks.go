@@ -5,7 +5,7 @@ import "fmt"
 type StackType int
 
 const (
-	StackSingle            StackType = iota
+	StackSingle StackType = iota
 	StackAppDB
 	StackFrontendBackend
 	StackFrontendBackendDB
