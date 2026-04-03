@@ -35,5 +35,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cleanup chart
+        run: |
+          helm upgrade --install cleanup \
+            oci://ghcr.io/emilvorre/trainyard/charts/cleanup \
+            --version 0.1.0 \
+            --namespace trainyard-system \
+            --create-namespace \
+            --set schedule="0 0 * * *"
+
       - name: Run Chainsaw tests
         run: chainsaw test --test-dir tests/chainsaw/

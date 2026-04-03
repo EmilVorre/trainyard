@@ -1,7 +1,7 @@
 # Trainyard cleanup chart values
 
 # How often the cleanup job runs (cron expression)
-schedule: "0 * * * *"  # every hour
+schedule: "0 0 * * *"  # every day at midnight
 
 # Delete preview namespaces older than this many days
 maxAgeDays: 7
