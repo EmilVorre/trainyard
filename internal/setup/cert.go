@@ -1,5 +1,5 @@
 package setup
- 
+
 import (
 	"fmt"
 	"os"
@@ -7,20 +7,20 @@ import (
 
 	"github.com/Emilvorre/trainyard/internal/tui"
 )
- 
+
 type dnsProvider struct {
 	Label   string
 	Hook    string
 	EnvVars []dnsEnvVar
 	DocsURL string
 }
- 
+
 type dnsEnvVar struct {
 	Key    string
 	Label  string
 	Secret bool
 }
- 
+
 var supportedProviders = []dnsProvider{
 	{
 		Label:   "Cloudflare",
@@ -81,7 +81,7 @@ var supportedProviders = []dnsProvider{
 		DocsURL: "https://github.com/acmesh-official/acme.sh/wiki/dnsapi",
 	},
 }
- 
+
 type certConfig struct {
 	Domain     string
 	Email      string
@@ -89,14 +89,14 @@ type certConfig struct {
 	EnvVals    map[string]string
 	CustomHook string
 }
- 
+
 func pickDNSProvider(domain, email string) certConfig {
 	cfg := certConfig{
 		Domain:  domain,
 		Email:   email,
 		EnvVals: map[string]string{},
 	}
- 
+
 	fmt.Println()
 	fmt.Println("  DNS provider for wildcard certificate (DNS-01 challenge):")
 	fmt.Println()
@@ -104,7 +104,7 @@ func pickDNSProvider(domain, email string) certConfig {
 		fmt.Printf("  [%d] %s\n", i+1, p.Label)
 	}
 	fmt.Println()
- 
+
 	var chosen dnsProvider
 	for {
 		choice := tui.Prompt("Choose provider", "1")
@@ -116,14 +116,14 @@ func pickDNSProvider(domain, email string) certConfig {
 		}
 		tui.Warn("Enter a number between 1 and %d", len(supportedProviders))
 	}
- 
+
 	cfg.Provider = chosen
- 
+
 	switch chosen.Hook {
 	case "manual":
 		fmt.Println()
 		tui.Info("You will be prompted to add TXT records to your DNS manually.")
- 
+
 	case "other":
 		fmt.Println()
 		tui.Info("Full provider list: %s", chosen.DocsURL)
@@ -140,7 +140,7 @@ func pickDNSProvider(domain, email string) certConfig {
 			val := tui.Prompt(fmt.Sprintf("Value for %s", key), "")
 			cfg.EnvVals[key] = val
 		}
- 
+
 	default:
 		if len(chosen.EnvVars) > 0 {
 			fmt.Println()
@@ -153,10 +153,10 @@ func pickDNSProvider(domain, email string) certConfig {
 			}
 		}
 	}
- 
+
 	return cfg
 }
- 
+
 func installAcmeSh(cfg certConfig) error {
 	if !commandExists("/root/.acme.sh/acme.sh") {
 		if err := run("sh", "-c",
@@ -165,25 +165,25 @@ func installAcmeSh(cfg certConfig) error {
 			return fmt.Errorf("installing acme.sh: %w", err)
 		}
 	}
- 
+
 	acme := "/root/.acme.sh/acme.sh"
 	_ = runSilent(acme, "--register-account", "-m", cfg.Email, "--server", "letsencrypt")
- 
+
 	for k, v := range cfg.EnvVals {
 		os.Setenv(k, v)
 	}
- 
+
 	hook := cfg.Provider.Hook
 	if hook == "other" {
 		hook = cfg.CustomHook
 	}
- 
+
 	if hook == "manual" {
 		return issueCertManual(acme, cfg)
 	}
 	return issueCertDNSAPI(acme, cfg, hook)
 }
- 
+
 func issueCertDNSAPI(acme string, cfg certConfig, hook string) error {
 	return run(acme,
 		"--issue",
@@ -194,7 +194,7 @@ func issueCertDNSAPI(acme string, cfg certConfig, hook string) error {
 		"--keylength", "ec-256",
 	)
 }
- 
+
 func issueCertManual(acme string, cfg certConfig) error {
 	fmt.Println()
 	fmt.Println("  acme.sh will print TXT records to add to your DNS.")
@@ -210,15 +210,15 @@ func issueCertManual(acme string, cfg certConfig) error {
 		"--yes-I-know-dns-manual-mode-enough-go-ahead-please",
 	)
 }
- 
+
 func installCertToNginx(domain string) error {
 	acme := "/root/.acme.sh/acme.sh"
 	targetDir := fmt.Sprintf("/etc/letsencrypt/live/%s", domain)
- 
+
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return err
 	}
- 
+
 	return run(acme,
 		"--install-cert",
 		"-d", domain,
@@ -230,13 +230,12 @@ func installCertToNginx(domain string) error {
 		"--reloadcmd", "systemctl reload nginx",
 	)
 }
- 
+
 func certExists(domain string) bool {
 	_, err := os.Stat(fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain))
 	return err == nil
 }
- 
+
 func sanitizeDomain(d string) string {
 	return strings.TrimPrefix(d, "*.")
 }
- 
