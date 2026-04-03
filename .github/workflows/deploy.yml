@@ -142,6 +142,16 @@ jobs:
         run: |
           kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Label and annotate namespace
+        run: |
+          kubectl label namespace ${{ env.NAMESPACE }} \
+            trainyard.dev/preview=true \
+            --overwrite
+      
+          kubectl annotate namespace ${{ env.NAMESPACE }} \
+            trainyard.dev/deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --overwrite
+
       - name: Deploy via Helm
         if: steps.check.outputs.should_run == 'true'
         run: |

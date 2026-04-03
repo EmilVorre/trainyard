@@ -1,0 +1,37 @@
+# Trainyard cleanup chart values
+
+# How often the cleanup job runs (cron expression)
+schedule: "0 * * * *"  # every hour
+
+# Delete preview namespaces older than this many days
+maxAgeDays: 7
+
+# Label used to identify preview namespaces
+namespaceLabel: "trainyard.dev/preview=true"
+
+# Annotation used to read the deploy timestamp
+deployedAtAnnotation: "trainyard.dev/deployed-at"
+
+image:
+  repository: ghcr.io/emilvorre/trainyard/cleanup
+  tag: "latest"
+  pullPolicy: Always
+
+# Namespace the CronJob itself runs in
+namespace: trainyard-system
+
+# Resource limits for the cleanup job pod
+resources:
+  limits:
+    cpu: "100m"
+    memory: "64Mi"
+  requests:
+    cpu: "50m"
+    memory: "32Mi"
+
+# Retain the last N completed/failed jobs
+successfulJobsHistoryLimit: 3
+failedJobsHistoryLimit: 3
+
+# Log level: info | debug
+logLevel: info
