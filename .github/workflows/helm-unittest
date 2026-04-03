@@ -1,0 +1,26 @@
+name: Helm Unit Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  helm-unittest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+
+      - name: Run tests for pr-preview chart
+        run: helm unittest charts/pr-preview
+
+      - name: Run tests for cleanup chart
+        run: helm unittest charts/cleanup
