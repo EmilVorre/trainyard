@@ -70,11 +70,11 @@ spec:
                 namespace: trainyard-system
               status:
                 conditions:
-                  - type: Complete
-                    status: "True"
                   - type: SuccessCriteriaMet
                     status: "True"
-
+                  - type: Complete
+                    status: "True"
+                  
     - name: assert-stale-namespace-deleted
       try:
         - error:
