@@ -8,7 +8,6 @@ spec:
     labels/annotations, installs the pr-preview chart, and asserts that all
     resources come up correctly.
   steps:
-    # ── 1. Create namespace ──────────────────────────────────────────────────
     - name: create-namespace
       try:
         - apply:
@@ -33,7 +32,6 @@ spec:
                 labels:
                   trainyard.dev/preview: "true"
 
-    # ── 2. Install Helm chart ────────────────────────────────────────────────
     - name: helm-install
       try:
         - script:
@@ -57,10 +55,10 @@ spec:
             check:
               ($error): ~
 
-    # ── 3. Assert Deployment ─────────────────────────────────────────────────
-    - name: assert-deployment-exists
+    - name: assert-deployment-ready
       try:
         - assert:
+            timeout: 2m
             resource:
               apiVersion: apps/v1
               kind: Deployment
@@ -72,21 +70,9 @@ spec:
                 selector:
                   matchLabels:
                     app.kubernetes.io/name: app
-
-    - name: assert-deployment-ready
-      try:
-        - assert:
-            timeout: 2m
-            resource:
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: app
-                namespace: preview-pr-9999
               status:
                 availableReplicas: 1
 
-    # ── 4. Assert Service ────────────────────────────────────────────────────
     - name: assert-service-exists
       try:
         - assert:
@@ -102,7 +88,6 @@ spec:
                   - port: 3000
                     targetPort: http
 
-    # ── 5. Assert Ingress ────────────────────────────────────────────────────
     - name: assert-ingress-exists
       try:
         - assert:
@@ -133,7 +118,6 @@ spec:
                       - pr-9999.preview.vorre.dev
                     secretName: tls-app-pr-9999
 
-    # ── 6. Assert namespace labels and annotations are correct ───────────────
     - name: assert-namespace-labels
       try:
         - assert:
@@ -144,10 +128,8 @@ spec:
                 name: preview-pr-9999
                 labels:
                   trainyard.dev/preview: "true"
-
-  # ── Cleanup — always runs ──────────────────────────────────────────────────
-  finally:
-    - script:
-        content: |
-          helm uninstall pr-9999 --namespace preview-pr-9999 --ignore-not-found
-          kubectl delete namespace preview-pr-9999 --ignore-not-found
+      finally:
+        - script:
+            content: |
+              helm uninstall pr-9999 --namespace preview-pr-9999 --ignore-not-found
+              kubectl delete namespace preview-pr-9999 --ignore-not-found
