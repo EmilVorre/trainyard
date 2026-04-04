@@ -2,7 +2,7 @@ apiVersion: v2
 name: pr-preview
 description: Trainyard — ephemeral PR preview environments for Kubernetes
 type: application
-version: 0.1.3
+version: 1.1.0
 appVersion: "0.1.2"
 keywords:
   - preview
