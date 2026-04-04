@@ -58,14 +58,6 @@ go build -o yard ./cmd/yard
 go test ./internal/...
 ```
 
-### Lint
-
-```bash
-go vet ./...
-# Install golangci-lint: https://golangci-lint.run/usage/install/
-golangci-lint run
-```
-
 ### Test the Helm chart locally
 
 ```bash

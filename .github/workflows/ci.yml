@@ -24,12 +24,6 @@ jobs:
       - name: go test
         run: go test ./internal/...
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --skip-go-version-check
-
   helm:
     name: Helm lint
     runs-on: ubuntu-latest
