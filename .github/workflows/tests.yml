@@ -51,6 +51,7 @@ jobs:
   chainsaw-e2e:
     name: Chainsaw E2E Tests
     runs-on: ubuntu-latest
+    needs: helm-unittest
 
     steps:
       - name: Checkout
@@ -81,11 +82,12 @@ jobs:
       - name: Install cleanup chart
         run: |
           helm upgrade --install cleanup \
-            oci://ghcr.io/emilvorre/trainyard/charts/cleanup \
-            --version 0.1.0 \
+            charts/cleanup \
             --namespace trainyard-system \
             --create-namespace \
             --set schedule="0 0 * * *"
 
       - name: Run Chainsaw tests
         run: chainsaw test --test-dir tests/chainsaw/
+        env:
+          CHART_PATH: charts/pr-preview
