@@ -86,7 +86,7 @@ jobs:
       # Build and push all services that have a build context defined.
       # Services using upstream images like postgres are skipped.
       # -----------------------------------------------------------------------
-      - name: Build and push images
+      - name: Build and push service images
         if: steps.check.outputs.should_run == 'true'
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
@@ -115,6 +115,37 @@ jobs:
           done
 
       # -----------------------------------------------------------------------
+      # Build and push all jobs that have a build context defined.
+      # -----------------------------------------------------------------------
+      - name: Build and push job images
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          CONFIG_FILE="${{ inputs.config-file }}"
+          PR_NUMBER="${{ env.PR_NUMBER }}"
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+          JOB_COUNT=$(yq '.jobs // [] | length' "$CONFIG_FILE")
+
+          for i in $(seq 0 $((JOB_COUNT - 1))); do
+            BUILD_CONTEXT=$(yq ".jobs[$i].build.context // \"\"" "$CONFIG_FILE")
+            JOB_NAME=$(yq ".jobs[$i].name" "$CONFIG_FILE")
+
+            if [ -n "$BUILD_CONTEXT" ]; then
+              DOCKERFILE=$(yq ".jobs[$i].build.dockerfile // \"Dockerfile\"" "$CONFIG_FILE")
+              IMAGE="ghcr.io/${REPO}/${JOB_NAME}:pr-${PR_NUMBER}"
+
+              echo "Building $JOB_NAME -> $IMAGE"
+              docker build -f "$DOCKERFILE" -t "$IMAGE" "$BUILD_CONTEXT"
+
+              echo "Pushing $IMAGE"
+              docker push "$IMAGE"
+              echo "$JOB_NAME image pushed"
+            else
+              echo "Skipping $JOB_NAME - no build context"
+            fi
+          done
+
+      # -----------------------------------------------------------------------
       # Set up kubectl and Helm then configure kubeconfig from the secret
       # -----------------------------------------------------------------------
       - name: Set up kubectl
@@ -135,7 +166,7 @@ jobs:
       # -----------------------------------------------------------------------
       # Create the namespace if it doesn't exist (idempotent)
       # then deploy via Helm, injecting the PR number and domain.
-      # Built service images are overridden with the PR-tagged image.
+      # Built service and job images are overridden with the PR-tagged image.
       # -----------------------------------------------------------------------
       - name: Create namespace
         if: steps.check.outputs.should_run == 'true'
@@ -147,7 +178,7 @@ jobs:
           kubectl label namespace ${{ env.NAMESPACE }} \
             trainyard.dev/preview=true \
             --overwrite
-      
+
           kubectl annotate namespace ${{ env.NAMESPACE }} \
             trainyard.dev/deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --overwrite
@@ -164,7 +195,7 @@ jobs:
           # Substitute {number} placeholders in the config and write to a temp file
           sed "s/{number}/${PR_NUMBER}/g" "$CONFIG_FILE" > /tmp/pr-values.yaml
 
-          # Build --set args for any services that were built from source
+          # Build --set args for services built from source
           SERVICE_COUNT=$(yq '.services | length' "$CONFIG_FILE")
           SET_ARGS=""
 
@@ -176,6 +207,20 @@ jobs:
               IMAGE="ghcr.io/${REPO}/${SERVICE_NAME}"
               TAG="pr-${PR_NUMBER}"
               SET_ARGS="$SET_ARGS --set services[$i].image.repository=${IMAGE} --set services[$i].image.tag=${TAG}"
+            fi
+          done
+
+          # Build --set args for jobs built from source
+          JOB_COUNT=$(yq '.jobs // [] | length' "$CONFIG_FILE")
+
+          for i in $(seq 0 $((JOB_COUNT - 1))); do
+            BUILD_CONTEXT=$(yq ".jobs[$i].build.context // \"\"" "$CONFIG_FILE")
+            JOB_NAME=$(yq ".jobs[$i].name" "$CONFIG_FILE")
+
+            if [ -n "$BUILD_CONTEXT" ]; then
+              IMAGE="ghcr.io/${REPO}/${JOB_NAME}"
+              TAG="pr-${PR_NUMBER}"
+              SET_ARGS="$SET_ARGS --set jobs[$i].image.repository=${IMAGE} --set jobs[$i].image.tag=${TAG}"
             fi
           done
 
