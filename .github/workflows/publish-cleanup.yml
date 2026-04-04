@@ -47,8 +47,8 @@ jobs:
           file: charts/cleanup/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/trainyard/cleanup:latest
-            ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/trainyard/cleanup:${{ steps.chart.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/trainyard-cleanup:latest
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/trainyard/charts/cleanup:${{ steps.chart.outputs.version }}
 
       - name: Install Helm
         uses: azure/setup-helm@v4
