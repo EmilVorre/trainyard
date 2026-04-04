@@ -11,7 +11,7 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
  
-## [1.0.0]
+## [1.0.0] — 2026-04-04
  
 ### Added
 - Go unit tests for `internal/scaffold`, `internal/validate`, `internal/tui`, and `internal/setup`
@@ -28,7 +28,7 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
  
 ---
 
-## [0.1.3]
+## [0.1.3] — 2026-04-03
 
 ### Added
 - `yard setup` — interactive server setup wizard
@@ -39,7 +39,7 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.1.2] — 2026-01-01
+## [0.1.2] — 2026-04-01
 
 ### Added
 - Helm chart `pr-preview` v0.1.2
@@ -52,7 +52,7 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.1.1] — 2026-01-01
+## [0.1.1] — 2026-04-01
 
 ### Added
 - GitHub Actions reusable workflows (`deploy.yml`, `teardown.yml`)
@@ -61,7 +61,7 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.1.0] — 2026-1-01
+## [0.1.0] — 2026-04-01
 
 ### Added
 - Initial Helm chart `pr-preview`
