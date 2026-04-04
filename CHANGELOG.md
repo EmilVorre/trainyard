@@ -8,9 +8,13 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 [Unreleased]
-- support for jobs for multi-services
 
 ---
+
+## [1.1.0] — 2026-04-05
+- support for jobs for multi-services
+
+--- 
  
 ## [1.0.0] — 2026-04-04
  
