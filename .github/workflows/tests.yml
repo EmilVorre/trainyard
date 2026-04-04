@@ -9,18 +9,24 @@ jobs:
   go-unittest:
     name: Go Unit Tests
     runs-on: ubuntu-latest
-
+ 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+ 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
+ 
       - name: Run tests
-        run: go test ./internal/...
+        run: go test -coverprofile=coverage.out ./internal/...
+ 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   helm-unittest:
     name: Helm Unit Tests
