@@ -10,6 +10,7 @@ Trainyard spins up a full preview environment for every pull request, tears it d
 [![Release](https://github.com/Emilvorre/trainyard/actions/workflows/release.yml/badge.svg)](https://github.com/Emilvorre/trainyard/actions/workflows/release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Emilvorre/trainyard)](https://goreportcard.com/report/github.com/Emilvorre/trainyard)
 [![Helm Chart](https://img.shields.io/badge/Helm-oci%3A%2F%2Fghcr.io-blue)](https://github.com/Emilvorre/trainyard/pkgs/container/trainyard%2Fcharts%2Fpr-preview)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/trainyard)](https://artifacthub.io/packages/search?repo=trainyard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/Emilvorre/trainyard)](https://github.com/Emilvorre/trainyard/releases)
 
