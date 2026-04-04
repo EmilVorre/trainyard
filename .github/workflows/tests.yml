@@ -1,4 +1,4 @@
-name: Chainsaw E2E Tests
+name: Tests
 
 on:
   pull_request:
@@ -6,7 +6,44 @@ on:
       - main
 
 jobs:
-  chainsaw:
+  go-unittest:
+    name: Go Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./internal/...
+
+  helm-unittest:
+    name: Helm Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+
+      - name: Run tests for pr-preview chart
+        run: helm unittest charts/pr-preview
+
+      - name: Run tests for cleanup chart
+        run: helm unittest charts/cleanup
+
+  chainsaw-e2e:
+    name: Chainsaw E2E Tests
     runs-on: ubuntu-latest
 
     steps:
