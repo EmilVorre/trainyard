@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  goreleaser:
+    name: Release CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  helm-charts:
+    name: Publish Helm charts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package and push pr-preview chart
+        run: |
+          VERSION=$(grep '^version:' charts/pr-preview/Chart.yaml | awk '{print $2}')
+          helm package charts/pr-preview --destination /tmp/charts
+          helm push /tmp/charts/pr-preview-${VERSION}.tgz \
+            oci://ghcr.io/emilvorre/trainyard/charts
+
+      - name: Package and push cleanup chart
+        run: |
+          VERSION=$(grep '^version:' charts/cleanup/Chart.yaml | awk '{print $2}')
+          helm package charts/cleanup --destination /tmp/charts
+          helm push /tmp/charts/cleanup-${VERSION}.tgz \
+            oci://ghcr.io/emilvorre/trainyard/charts
