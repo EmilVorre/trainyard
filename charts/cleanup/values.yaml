@@ -13,7 +13,7 @@ namespaceLabel: "trainyard.dev/preview=true"
 deployedAtAnnotation: "trainyard.dev/deployed-at"
 
 image:
-  repository: ghcr.io/emilvorre/trainyard/charts/cleanup
+  repository: ghcr.io/emilvorre/trainyard/cleanup
   tag: "latest"
   pullPolicy: Always
 
