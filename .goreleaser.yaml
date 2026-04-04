@@ -1,0 +1,76 @@
+version: 2
+
+project_name: yard
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: yard
+    main: ./cmd/yard
+    binary: yard
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: yard
+    name_template: "yard_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: Emilvorre
+    name: trainyard
+  name_template: "v{{.Version}}"
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: yard
+    repository:
+      owner: Emilvorre
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/Emilvorre/trainyard"
+    description: "CLI for Trainyard — ephemeral Kubernetes PR preview environments"
+    license: "MIT"
+    install: |
+      bin.install "yard"
+    test: |
+      system "#{bin}/yard", "--help"
