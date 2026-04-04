@@ -1,0 +1,8 @@
+# Artifact Hub repository metadata
+# https://artifacthub.io/docs/topics/repositories/helm-charts/
+repositoryID: c6a8131c-047f-476b-befb-bf8c0413e3a9
+owners:
+  - name: Emil Vorre
+    email: emil@vorre.dev
+ignore:
+  - name: "test-*"
