@@ -40,7 +40,7 @@ spec:
       containers:
         - name: {{ .name }}
           image: "{{ .image.repository }}:{{ .image.tag | default "latest" }}"
-          imagePullPolicy: {{ .image.pullPolicy | default "Always" }}
+          imagePullPolicy: {{ if kindIs "map" .image }}{{ .image.pullPolicy | default "Always" }}{{ else }}Always{{ end }}
           {{- if .env }}
           env:
             {{- range .env }}
