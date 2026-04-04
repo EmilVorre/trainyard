@@ -11,7 +11,16 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.1.1] — 2026-04-05
+
+### Fix
+- support plain image strings alongside repository/tag objects in deployment template
+
+---
+
 ## [1.1.0] — 2026-04-05
+
+### Added
 - support for jobs for multi-services
 
 --- 
