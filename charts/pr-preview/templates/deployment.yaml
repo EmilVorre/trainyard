@@ -39,7 +39,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .name }}
-          image: "{{ .image.repository }}:{{ .image.tag | default "latest" }}"
+          image: "{{ if kindIs "map" .image }}{{ .image.repository }}:{{ .image.tag | default "latest" }}{{ else }}{{ .image }}{{ end }}"
           imagePullPolicy: {{ .image.pullPolicy | default "Always" }}
           ports:
             - name: http
