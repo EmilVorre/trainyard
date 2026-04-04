@@ -1,0 +1,284 @@
+suite: job tests
+templates:
+  - job.yaml
+
+tests:
+  # ── Basic rendering ────────────────────────────────────────────────────────
+
+  - it: should create a Job for each entry in jobs
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+        - name: seed
+          image:
+            repository: myorg/seed
+            tag: pr-42
+    asserts:
+      - hasDocuments:
+          count: 2
+
+  - it: should set the correct name on the Job
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: metadata.name
+          value: migrate
+
+  - it: should render no Jobs when jobs is empty
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs: []
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should render no Jobs when jobs is not set
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # ── Helm hook ──────────────────────────────────────────────────────────────
+
+  - it: should have post-install and post-upgrade hooks
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: post-install,post-upgrade
+
+  - it: should delete before hook creation
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          value: before-hook-creation
+
+  # ── Pod spec ───────────────────────────────────────────────────────────────
+
+  - it: should set restartPolicy to OnFailure
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: spec.template.spec.restartPolicy
+          value: OnFailure
+
+  - it: should set backoffLimit to 3
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: spec.backoffLimit
+          value: 3
+
+  # ── Image ──────────────────────────────────────────────────────────────────
+
+  - it: should set the correct image
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "myorg/migrate:pr-42"
+
+  - it: should default image tag to latest when not set
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "myorg/migrate:latest"
+
+  - it: should default imagePullPolicy to Always
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: Always
+
+  # ── Environment variables ──────────────────────────────────────────────────
+
+  - it: should set plain env vars
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+          env:
+            - name: POSTGRES_HOST
+              value: db
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: POSTGRES_HOST
+      - equal:
+          path: spec.template.spec.containers[0].env[0].value
+          value: db
+
+  - it: should set env vars from secrets
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+          envFromSecrets:
+            - name: DB_PASSWORD
+              secretName: db-secret
+              secretKey: password
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: DB_PASSWORD
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: db-secret
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.key
+          value: password
+
+  - it: should not set env when both env and envFromSecrets are empty
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+          env: []
+          envFromSecrets: []
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].env
+
+  # ── dependsOn / initContainers ─────────────────────────────────────────────
+
+  - it: should create an initContainer when dependsOn is set
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+          dependsOn:
+            - service: db
+              port: 5432
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: wait-for-db
+
+  - it: should not create initContainers when dependsOn is empty
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+          dependsOn: []
+    asserts:
+      - notExists:
+          path: spec.template.spec.initContainers
+
+  # ── Resources ──────────────────────────────────────────────────────────────
+
+  - it: should set resource limits when specified
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+          resources:
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: "250m"
+
+  - it: should not set resources when not specified
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: myorg/migrate
+            tag: pr-42
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].resources
