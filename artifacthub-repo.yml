@@ -1,0 +1,8 @@
+# Artifact Hub repository metadata
+# https://artifacthub.io/docs/topics/repositories/helm-charts/
+repositoryID: trainyard
+owners:
+  - name: Emil Vorre
+    email: emil@vorre.dev
+ignore:
+  - name: "test-*"
