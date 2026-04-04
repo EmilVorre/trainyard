@@ -9,6 +9,7 @@ Trainyard spins up a full preview environment for every pull request, tears it d
 [![CodeQL](https://github.com/Emilvorre/trainyard/actions/workflows/codeql.yml/badge.svg)](https://github.com/Emilvorre/trainyard/actions/workflows/codeql.yml)
 [![Release](https://github.com/Emilvorre/trainyard/actions/workflows/release.yml/badge.svg)](https://github.com/Emilvorre/trainyard/actions/workflows/release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Emilvorre/trainyard)](https://goreportcard.com/report/github.com/Emilvorre/trainyard)
+[![Codecov](https://codecov.io/gh/Emilvorre/trainyard/branch/main/graph/badge.svg)](https://app.codecov.io/gh/Emilvorre/trainyard/branch/main)
 [![Helm Chart](https://img.shields.io/badge/Helm-oci%3A%2F%2Fghcr.io-blue)](https://github.com/Emilvorre/trainyard/pkgs/container/trainyard%2Fcharts%2Fpr-preview)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/trainyard-pr-preview)](https://artifacthub.io/packages/search?repo=trainyard-pr-preview)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/trainyard-cleanup)](https://artifacthub.io/packages/search?repo=trainyard-cleanup)
