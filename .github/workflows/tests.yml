@@ -88,6 +88,6 @@ jobs:
             --set schedule="0 0 * * *"
 
       - name: Run Chainsaw tests
-        run: chainsaw test --test-dir tests/chainsaw/
+        run: chainsaw test --test-dir tests/chainsaw/ --test-file "chainsaw-*-test.yaml"
         env:
           CHART_PATH: charts/pr-preview
