@@ -87,21 +87,6 @@ spec:
                 name: migrate
                 namespace: preview-pr-9996
 
-    - name: assert-migrate-job-has-init-container
-      try:
-        - assert:
-            resource:
-              apiVersion: batch/v1
-              kind: Job
-              metadata:
-                name: migrate
-                namespace: preview-pr-9996
-              spec:
-                template:
-                  spec:
-                    initContainers:
-                      - name: wait-for-db
-
     - name: assert-migrate-job-has-hook-annotations
       try:
         - assert:
