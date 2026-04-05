@@ -11,6 +11,14 @@ Trainyard uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.1.3]
+
+### Fix
+- fixed multiservice jobs
+- fixed chainsaw test naming
+
+---
+
 ## [1.1.1] — 2026-04-05
 
 ### Fix
