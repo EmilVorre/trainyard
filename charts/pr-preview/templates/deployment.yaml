@@ -40,7 +40,7 @@ spec:
       containers:
         - name: {{ .name }}
           image: "{{ if kindIs "map" .image }}{{ .image.repository }}:{{ .image.tag | default "latest" }}{{ else }}{{ .image }}{{ end }}"
-          imagePullPolicy: {{ .image.pullPolicy | default "Always" }}
+          imagePullPolicy: {{ if kindIs "map" .image }}{{ .image.pullPolicy | default "Always" }}{{ else }}Always{{ end }}
           ports:
             - name: http
               containerPort: {{ .port }}

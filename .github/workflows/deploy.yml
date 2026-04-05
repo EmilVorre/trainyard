@@ -183,7 +183,7 @@ jobs:
             trainyard.dev/deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --overwrite
 
-      - name: Deploy via Helm
+            - name: Deploy via Helm
         if: steps.check.outputs.should_run == 'true'
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
@@ -191,39 +191,45 @@ jobs:
           NAMESPACE="${{ env.NAMESPACE }}"
           DOMAIN="${{ steps.config.outputs.domain }}"
           REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-
+ 
           # Substitute {number} placeholders in the config and write to a temp file
           sed "s/{number}/${PR_NUMBER}/g" "$CONFIG_FILE" > /tmp/pr-values.yaml
-
+ 
+          echo "--- pr-values.yaml ---"
+          cat /tmp/pr-values.yaml
+          echo "----------------------"
+ 
           # Build --set args for services built from source
           SERVICE_COUNT=$(yq '.services | length' "$CONFIG_FILE")
           SET_ARGS=""
-
+ 
           for i in $(seq 0 $((SERVICE_COUNT - 1))); do
             BUILD_CONTEXT=$(yq ".services[$i].build.context // \"\"" "$CONFIG_FILE")
             SERVICE_NAME=$(yq ".services[$i].name" "$CONFIG_FILE")
-
+ 
             if [ -n "$BUILD_CONTEXT" ]; then
               IMAGE="ghcr.io/${REPO}/${SERVICE_NAME}"
               TAG="pr-${PR_NUMBER}"
               SET_ARGS="$SET_ARGS --set services[$i].image.repository=${IMAGE} --set services[$i].image.tag=${TAG}"
             fi
           done
-
+ 
           # Build --set args for jobs built from source
           JOB_COUNT=$(yq '.jobs // [] | length' "$CONFIG_FILE")
-
+ 
           for i in $(seq 0 $((JOB_COUNT - 1))); do
             BUILD_CONTEXT=$(yq ".jobs[$i].build.context // \"\"" "$CONFIG_FILE")
             JOB_NAME=$(yq ".jobs[$i].name" "$CONFIG_FILE")
-
+ 
             if [ -n "$BUILD_CONTEXT" ]; then
               IMAGE="ghcr.io/${REPO}/${JOB_NAME}"
               TAG="pr-${PR_NUMBER}"
               SET_ARGS="$SET_ARGS --set jobs[$i].image.repository=${IMAGE} --set jobs[$i].image.tag=${TAG}"
             fi
           done
-
+ 
+          echo "SET_ARGS: $SET_ARGS"
+ 
           helm upgrade --install pr-${PR_NUMBER} \
             oci://ghcr.io/emilvorre/trainyard/charts/pr-preview \
             --namespace "$NAMESPACE" \
@@ -232,7 +238,7 @@ jobs:
             --set global.domain="${DOMAIN}" \
             -f /tmp/pr-values.yaml \
             $SET_ARGS
-
+ 
           echo "Deployed to namespace $NAMESPACE"
 
       # -----------------------------------------------------------------------
