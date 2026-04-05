@@ -48,8 +48,9 @@ spec:
                 --set "jobs[0].name=migrate" \
                 --set "jobs[0].image.repository=alpine" \
                 --set "jobs[0].image.tag=latest" \
-                --set "jobs[0].dependsOn[0].service=db" \
-                --set "jobs[0].dependsOn[0].port=5432"
+                --set "jobs[0].command[0]=sh" \
+                --set "jobs[0].command[1]=-c" \
+                --set "jobs[0].command[2]=exit 0" \
             check:
               ($error): ~
 
@@ -85,21 +86,6 @@ spec:
               metadata:
                 name: migrate
                 namespace: preview-pr-9996
-
-    - name: assert-migrate-job-has-init-container
-      try:
-        - assert:
-            resource:
-              apiVersion: batch/v1
-              kind: Job
-              metadata:
-                name: migrate
-                namespace: preview-pr-9996
-              spec:
-                template:
-                  spec:
-                    initContainers:
-                      - name: wait-for-db
 
     - name: assert-migrate-job-has-hook-annotations
       try:

@@ -39,8 +39,14 @@ spec:
       {{- end }}
       containers:
         - name: {{ .name }}
-          image: "{{ .image.repository }}:{{ .image.tag | default "latest" }}"
+          image: "{{ if kindIs "map" .image }}{{ .image.repository }}:{{ .image.tag | default "latest" }}{{ else }}{{ .image }}{{ end }}"
           imagePullPolicy: {{ if kindIs "map" .image }}{{ .image.pullPolicy | default "Always" }}{{ else }}Always{{ end }}
+          {{- if .command }}
+          command:
+            {{- range .command }}
+            - {{ . | quote }}
+            {{- end }}
+          {{- end }}
           {{- if .env }}
           env:
             {{- range .env }}

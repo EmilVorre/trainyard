@@ -156,6 +156,45 @@ tests:
           path: spec.template.spec.containers[0].imagePullPolicy
           value: Always
 
+  # ── Command ────────────────────────────────────────────────────────────────
+
+  - it: should set command when specified
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: alpine
+            tag: latest
+          command:
+            - sh
+            - -c
+            - exit 0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].command[0]
+          value: sh
+      - equal:
+          path: spec.template.spec.containers[0].command[1]
+          value: -c
+      - equal:
+          path: spec.template.spec.containers[0].command[2]
+          value: exit 0
+
+  - it: should not set command when not specified
+    set:
+      global.prNumber: "42"
+      global.domain: preview.vorre.dev
+      jobs:
+        - name: migrate
+          image:
+            repository: alpine
+            tag: latest
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].command
+
   # ── Environment variables ──────────────────────────────────────────────────
 
   - it: should set plain env vars

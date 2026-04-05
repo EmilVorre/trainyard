@@ -90,4 +90,4 @@ jobs:
       - name: Run Chainsaw tests
         run: chainsaw test --test-dir tests/chainsaw/
         env:
-          CHART_PATH: charts/pr-preview
+          CHART_PATH: ${{ github.workspace }}/charts/pr-preview
