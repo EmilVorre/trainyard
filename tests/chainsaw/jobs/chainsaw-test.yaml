@@ -48,6 +48,9 @@ spec:
                 --set "jobs[0].name=migrate" \
                 --set "jobs[0].image.repository=alpine" \
                 --set "jobs[0].image.tag=latest" \
+                --set "jobs[0].command[0]=sh" \
+                --set "jobs[0].command[1]=-c" \
+                --set "jobs[0].command[2]=exit 0" \
                 --set "jobs[0].dependsOn[0].service=db" \
                 --set "jobs[0].dependsOn[0].port=5432"
             check:
