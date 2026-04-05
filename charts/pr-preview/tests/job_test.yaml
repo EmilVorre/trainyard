@@ -286,8 +286,7 @@ suite: job tests
 templates:
   - job.yaml
 
-tests:
-  - it: should set command when specified
+- it: should set command when specified
     set:
       global.prNumber: "42"
       global.domain: preview.vorre.dev
